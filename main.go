@@ -10,9 +10,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -95,8 +97,6 @@ func main() {
 	jobs := make(chan FileJob, 100)
 	ctx := context.Background()
 	var wg sync.WaitGroup
-	var totalBytes int64
-	var mutex sync.Mutex
 
 	// create the text progress bars (only if not dry-run)
 	var progress *mpb.Progress
@@ -104,12 +104,15 @@ func main() {
 		progress = mpb.New(mpb.WithWaitGroup(&wg))
 	}
 
+	// create the aggregate stats shared across all workers
+	start := time.Now()
+	stats := NewStats()
+
 	// create the worker pool where each worker processes file-copy
 	// jobs from the jobs channel.
-	start := time.Now()
 	for i := range workers {
 		wg.Add(1)
-		go worker(ctx, i, jobs, dryRun, &wg, &totalBytes, &mutex, progress, chunkSize)
+		go worker(ctx, i, jobs, dryRun, &wg, stats, progress, chunkSize)
 	}
 
 	// traverse the input directory and send file jobs to the workers
@@ -128,8 +131,8 @@ func main() {
 
 	// log the total bytes copied, total time taken, and copy speed
 	duration := time.Since(start).Seconds()
-	mb := float64(totalBytes) / (1024 * 1024)
-	log.Printf("Total copied: %.2f MB in %.2f seconds (%.2f MB/s)", mb, duration, mb/duration)
+	log.Printf("Total copied: %.2f MB in %.2f seconds (%.2f MB/s)",
+		stats.MBytes, duration, stats.MBytes/duration)
 }
 
 // parseChunkSize parses a human-friendly chunk size string
@@ -193,8 +196,15 @@ func walkFiles(baseDir string, exts []string, jobs chan<- FileJob, tpl *template
 	// Walk the input directory and send file jobs to the channel
 	return filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
 		// check for errors and skip directories or unsupported files
-		if err != nil || info.IsDir() || !isSupported(path, exts) {
-			return err
+		if err != nil {
+			if errors.Is(err, fs.ErrPermission) {
+				// log permission errors and skip the file
+				log.Printf("Permission error: %v", err)
+				return nil
+			}
+			if info.IsDir() || !isSupported(path, exts) {
+				return err
+			}
 		}
 
 		// execute the template with the file metadata
@@ -215,8 +225,7 @@ func walkFiles(baseDir string, exts []string, jobs chan<- FileJob, tpl *template
 // copying unless in dry-run mode. It also tracks progress via a progress
 // bar and safely updates the shared totalBytes count.
 func worker(ctx context.Context, id int, jobs <-chan FileJob, dryRun bool,
-	wg *sync.WaitGroup, totalBytes *int64, mutex *sync.Mutex,
-	progress *mpb.Progress, chunkSize int) {
+	wg *sync.WaitGroup, stats *Stats, progress *mpb.Progress, chunkSize int) {
 
 	// mark the current worker as done when it finishes processing jobs
 	defer wg.Done()
@@ -328,8 +337,6 @@ func worker(ctx context.Context, id int, jobs <-chan FileJob, dryRun bool,
 		bar.SetTotal(copied, true)
 
 		// safely update the total bytes counter
-		mutex.Lock()
-		*totalBytes += copied
-		mutex.Unlock()
+		stats.AddBytes(copied)
 	}
 }
