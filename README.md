@@ -53,6 +53,8 @@ Usage:
     	Input directory root (required)
   -output string
     	Output directory root (required)
+  -overwrite
+    	Overwrite existing output files
   -template string
     	Text template for organizing output paths (default "{{.Year}}/{{.Year}}-{{.Month}}-{{.Day}}/{{.Name}}")
   -workers int
@@ -168,7 +170,7 @@ Total copied: 413.50 MB in 6.23 seconds (66.35 MB/s)
 
 ## ⚠️ Important Notes
 
-- Existing files **will be overwritten**.
+- Existing files **are not overwritten** (by default).
 - Directories will be created if they don't exist.
 - Existing directories are **not deleted**.
 

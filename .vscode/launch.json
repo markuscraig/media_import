@@ -1,0 +1,32 @@
+{
+    // .vscode/launch.json
+    "version": "0.2.0",
+    "configurations": [{
+        "name": "Debug dry-run; Untitled => BACKUP",
+        "type": "go",
+        "request": "launch",
+  
+        // Build & run everything in this directory
+        "program": "${workspaceFolder}",
+  
+        // Leave Delve to decide; change to "debug" or "test" if you have special needs
+        "mode": "auto",
+  
+        // Command‑line arguments for your CLI
+        "args": [
+            "--input", "/Volumes/Untitled",
+            "--output", "/Volumes/BACKUP/media",
+            "--workers", "3",
+            "--chunk-size", "1m",
+            "--dry-run"
+        ],
+  
+        // Optional: working directory, env vars, and build flags
+        "cwd": "${workspaceFolder}",
+        "env": {
+            // "MY_ENV": "value"
+        },
+        "buildFlags": ""    // e.g. "-tags=integration" or "-race"
+    }]
+  }
+  

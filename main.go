@@ -7,6 +7,8 @@ package main
 // a user-defined template (e.g. by year, month, day, and filename).
 // Includes support for parallel workers, dry-run mode, customizable
 // file extensions, chunk size control, and terminal progress bars.
+// By default, an existing output file is not overwritten. This behavior
+// can be changed by using the -overwrite flag.
 
 import (
 	"context"
@@ -39,6 +41,7 @@ var (
 	extensions   string // Comma-separated list of file extensions to import
 	workers      int    // Number of parallel workers
 	chunkSizeStr string // Copy buffer size (e.g. 32k, 1m)
+	overwrite    bool   // Overwrite existing files
 	dryRun       bool   // Log actions without copying files
 )
 
@@ -68,11 +71,18 @@ func main() {
 	flag.IntVar(&workers, "workers", 3, "Number of parallel workers")
 	flag.BoolVar(&dryRun, "dry-run", false, "Log actions without copying files")
 	flag.StringVar(&chunkSizeStr, "chunk-size", "1m", "Copy buffer size (e.g. 32k, 1m)")
+	flag.BoolVar(&overwrite, "overwrite", false, "Overwrite existing output files")
 	flag.Parse()
 
 	// validate input and output base directories
-	if inputDir == "" || outputDir == "" {
-		log.Fatal("Both input and output directories must be specified")
+	if inputDir == "" {
+		log.Fatal("Input directory must be specified")
+	} else if outputDir == "" {
+		log.Fatal("Output directory must be specified")
+	} else if _, err := os.Stat(inputDir); err != nil {
+		log.Fatalf("Input directory does not exist: %v", err)
+	} else if _, err := os.Stat(outputDir); err != nil {
+		log.Fatalf("Output directory does not exist: %v", err)
 	}
 
 	// parse the input read chunk size
@@ -195,21 +205,23 @@ func walkFiles(baseDir string, exts []string, jobs chan<- FileJob, tpl *template
 
 	// Walk the input directory and send file jobs to the channel
 	return filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
-		// if invalid file info
+		// validate the given file info
 		if info == nil {
 			return fmt.Errorf("invalid file info for path: %s", path)
 		}
 
-		// check for errors and skip directories or unsupported files
+		// check for errors
 		if err != nil {
 			if errors.Is(err, fs.ErrPermission) {
 				// log permission errors and skip the file
 				log.Printf("Permission error: %v", err)
 				return nil
 			}
-			if info.IsDir() || !isSupported(path, exts) {
-				return err
-			}
+		}
+
+		// skip directories or unsupported files
+		if info.IsDir() || !isSupported(path, exts) {
+			return err
 		}
 
 		// execute the template with the file metadata
@@ -218,6 +230,16 @@ func walkFiles(baseDir string, exts []string, jobs chan<- FileJob, tpl *template
 
 		// create the destination path using the template output
 		absDst := filepath.Join(absOutputBase, buf.String())
+
+		// if overwrite disabled, check if the destination file already exists
+		if !overwrite {
+			// check if the destination file already exists
+			if _, err := os.Stat(absDst); err == nil {
+				// log that the file already exists and skip it
+				log.Printf("File already exists: %s", absDst)
+				return nil
+			}
+		}
 
 		// create the file job and send it to the jobs channel
 		jobs <- FileJob{SrcPath: path, DstPath: absDst, Size: info.Size()}
