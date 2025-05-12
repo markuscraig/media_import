@@ -195,6 +195,11 @@ func walkFiles(baseDir string, exts []string, jobs chan<- FileJob, tpl *template
 
 	// Walk the input directory and send file jobs to the channel
 	return filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
+		// if invalid file info
+		if info == nil {
+			return fmt.Errorf("invalid file info for path: %s", path)
+		}
+
 		// check for errors and skip directories or unsupported files
 		if err != nil {
 			if errors.Is(err, fs.ErrPermission) {
