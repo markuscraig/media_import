@@ -63,20 +63,6 @@ Usage:
 
 ---
 
-## 🔧 CLI Options
-
-| Flag             | Description |
-|------------------|-------------|
-| `--input`        | **(Required)** Path to input directory |
-| `--output`       | **(Required)** Path to output directory |
-| `--template`     | Template path for organizing output (default: `{{.Year}}/{{.Year}}-{{.Month}}-{{.Day}}/{{.Name}}`) |
-| `--extensions`   | Comma-separated list of file extensions to import (default: `.jpg,.jpeg,.png,.gif,.bmp,.mp4,.mov,.avi,.mkv`) |
-| `--workers`      | Number of parallel file copying workers (default: `4`) |
-| `--chunk-size`   | Copy buffer size (supports `k`/`m`, default: `32k`) |
-| `--dry-run`      | If enabled, logs operations without copying files |
-
----
-
 ## 🧪 Example Commands
 
 ### 🔹 Basic import using defaults
